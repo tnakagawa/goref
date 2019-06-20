@@ -1,7 +1,7 @@
 package helloworld_test
 
 import (
-	"../helloworld"
+	"github.com/tnakagawa/goref/helloworld"
 
 	"testing"
 )
