@@ -1,5 +1,8 @@
 language: go
  
+install:
+ - go get -u github.com/btcsuite/btcd/btcec
+
 script:
   - go test -v ./...
 
