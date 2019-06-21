@@ -1,0 +1,398 @@
+package chacha20poly1305_test
+
+import (
+	"reflect"
+	"testing"
+
+	"github.com/tnakagawa/goref/chacha20poly1305"
+)
+
+func TestQuarterRound1(t *testing.T) {
+	a := uint32(0x11111111)
+	b := uint32(0x01020304)
+	c := uint32(0x9b8d6f43)
+	d := uint32(0x01234567)
+	state := make([]uint32, 16)
+	state[1] = a
+	state[5] = b
+	state[9] = c
+	state[13] = d
+	chacha20poly1305.Qround(state, 1, 5, 9, 13)
+	a1 := state[1]
+	b1 := state[5]
+	c1 := state[9]
+	d1 := state[13]
+	a2 := uint32(0xea2a92f4)
+	b2 := uint32(0xcb1cf8ce)
+	c2 := uint32(0x4581472e)
+	d2 := uint32(0x5881c4bb)
+	if a1 != a2 {
+		t.Errorf("a1 != a2 : %08x != %08x", a1, a2)
+	}
+	if b1 != b2 {
+		t.Errorf("b1 != b2 : %08x != %08x", b1, b2)
+	}
+	if c1 != c2 {
+		t.Errorf("c1 != c2 : %08x != %08x", c1, c2)
+	}
+	if d1 != d2 {
+		t.Errorf("d1 != d2 : %08x != %08x", d1, d2)
+	}
+}
+
+func TestQuarterRound2(t *testing.T) {
+	state := []uint32{
+		0x879531e0, 0xc5ecf37d, 0x516461b1, 0xc9a62f8a,
+		0x44c20ef3, 0x3390af7f, 0xd9fc690b, 0x2a5f714c,
+		0x53372767, 0xb00a5631, 0x974c541a, 0x359e9963,
+		0x5c971061, 0x3d631689, 0x2098d9d6, 0x91dbd320,
+	}
+	chacha20poly1305.Qround(state, 2, 7, 8, 13)
+	after := []uint32{
+		0x879531e0, 0xc5ecf37d, 0xbdb886dc, 0xc9a62f8a,
+		0x44c20ef3, 0x3390af7f, 0xd9fc690b, 0xcfacafd2,
+		0xe46bea80, 0xb00a5631, 0x974c541a, 0x359e9963,
+		0x5c971061, 0xccc07c79, 0x2098d9d6, 0x91dbd320,
+	}
+	if !reflect.DeepEqual(state, after) {
+		t.Errorf("state error : %x", state)
+		return
+	}
+}
+
+func TestChaChaBlock(t *testing.T) {
+	key := []byte{
+		0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f,
+		0x10, 0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17, 0x18, 0x19, 0x1a, 0x1b, 0x1c, 0x1d, 0x1e, 0x1f}
+	nonce := []byte{
+		0x00, 0x00, 0x00, 0x09, 0x00, 0x00, 0x00, 0x4a, 0x00, 0x00, 0x00, 0x00,
+	}
+	counter := uint32(1)
+	state, err := chacha20poly1305.ChaCha20Block(key, counter, nonce)
+	if err != nil {
+		t.Logf("%v", err)
+		return
+	}
+	bin := []byte{
+		0x10, 0xf1, 0xe7, 0xe4, 0xd1, 0x3b, 0x59, 0x15, 0x50, 0x0f, 0xdd, 0x1f, 0xa3, 0x20, 0x71, 0xc4,
+		0xc7, 0xd1, 0xf4, 0xc7, 0x33, 0xc0, 0x68, 0x03, 0x04, 0x22, 0xaa, 0x9a, 0xc3, 0xd4, 0x6c, 0x4e,
+		0xd2, 0x82, 0x64, 0x46, 0x07, 0x9f, 0xaa, 0x09, 0x14, 0xc2, 0xd7, 0x05, 0xd9, 0x8b, 0x02, 0xa2,
+		0xb5, 0x12, 0x9c, 0xd1, 0xde, 0x16, 0x4e, 0xb9, 0xcb, 0xd0, 0x83, 0xe8, 0xa2, 0x50, 0x3c, 0x4e,
+	}
+	if !reflect.DeepEqual(state, bin) {
+		t.Errorf("state error : %x", state)
+		return
+	}
+}
+
+func TestChaCha20Encrypt(t *testing.T) {
+	key := []byte{
+		0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f,
+		0x10, 0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17, 0x18, 0x19, 0x1a, 0x1b, 0x1c, 0x1d, 0x1e, 0x1f}
+	nonce := []byte{
+		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x4a, 0x00, 0x00, 0x00, 0x00,
+	}
+	counter := uint32(1)
+	str := "Ladies and Gentlemen of the class of '99: If I could offer you only one tip for the future, sunscreen would be it."
+	plaintext := []byte(str)
+	e, err := chacha20poly1305.ChaCha20Encrypt(key, counter, nonce, plaintext)
+	if err != nil {
+		t.Errorf("%v", err)
+		return
+	}
+	bin := []byte{
+		0x6e, 0x2e, 0x35, 0x9a, 0x25, 0x68, 0xf9, 0x80, 0x41, 0xba, 0x07, 0x28, 0xdd, 0x0d, 0x69, 0x81,
+		0xe9, 0x7e, 0x7a, 0xec, 0x1d, 0x43, 0x60, 0xc2, 0x0a, 0x27, 0xaf, 0xcc, 0xfd, 0x9f, 0xae, 0x0b,
+		0xf9, 0x1b, 0x65, 0xc5, 0x52, 0x47, 0x33, 0xab, 0x8f, 0x59, 0x3d, 0xab, 0xcd, 0x62, 0xb3, 0x57,
+		0x16, 0x39, 0xd6, 0x24, 0xe6, 0x51, 0x52, 0xab, 0x8f, 0x53, 0x0c, 0x35, 0x9f, 0x08, 0x61, 0xd8,
+		0x07, 0xca, 0x0d, 0xbf, 0x50, 0x0d, 0x6a, 0x61, 0x56, 0xa3, 0x8e, 0x08, 0x8a, 0x22, 0xb6, 0x5e,
+		0x52, 0xbc, 0x51, 0x4d, 0x16, 0xcc, 0xf8, 0x06, 0x81, 0x8c, 0xe9, 0x1a, 0xb7, 0x79, 0x37, 0x36,
+		0x5a, 0xf9, 0x0b, 0xbf, 0x74, 0xa3, 0x5b, 0xe6, 0xb4, 0x0b, 0x8e, 0xed, 0xf2, 0x78, 0x5e, 0x42,
+		0x87, 0x4d,
+	}
+	if !reflect.DeepEqual(e, bin) {
+		t.Errorf("encrypt error :\n%02x\n%02x", e, bin)
+		return
+	}
+	e, err = chacha20poly1305.ChaCha20Encrypt(key, counter, nonce, e)
+	if err != nil {
+		t.Errorf("%v", err)
+		return
+	}
+	if str != string(e) {
+		t.Errorf("encrypt error :\n%s\n%s", str, string(e))
+		return
+	}
+}
+
+func TestPoly1305Mac(t *testing.T) {
+	key := []byte{
+		0x85, 0xd6, 0xbe, 0x78, 0x57, 0x55, 0x6d, 0x33, 0x7f, 0x44, 0x52, 0xfe, 0x42, 0xd5, 0x06, 0xa8,
+		0x01, 0x03, 0x80, 0x8a, 0xfb, 0x0d, 0xb2, 0xfd, 0x4a, 0xbf, 0xf6, 0xaf, 0x41, 0x49, 0xf5, 0x1b,
+	}
+	msg := []byte{
+		0x43, 0x72, 0x79, 0x70, 0x74, 0x6f, 0x67, 0x72, 0x61, 0x70, 0x68, 0x69, 0x63, 0x20, 0x46, 0x6f,
+		0x72, 0x75, 0x6d, 0x20, 0x52, 0x65, 0x73, 0x65, 0x61, 0x72, 0x63, 0x68, 0x20, 0x47, 0x72, 0x6f,
+		0x75, 0x70,
+	}
+	tag, err := chacha20poly1305.Poly1305Mac(msg, key)
+	if err != nil {
+		t.Errorf("%v", err)
+		return
+	}
+	bin := []byte{
+		0xa8, 0x06, 0x1d, 0xc1, 0x30, 0x51, 0x36, 0xc6, 0xc2, 0x2b, 0x8b, 0xaf, 0x0c, 0x01, 0x27, 0xa9,
+	}
+	t.Logf("%x", tag)
+	if !reflect.DeepEqual(tag, bin) {
+		t.Errorf("Poly1305Mac error :\n%02x\n%02x", tag, bin)
+		return
+	}
+}
+
+func TestPoly1305KeyGen(t *testing.T) {
+	key := []byte{
+		0x80, 0x81, 0x82, 0x83, 0x84, 0x85, 0x86, 0x87, 0x88, 0x89, 0x8a, 0x8b, 0x8c, 0x8d, 0x8e, 0x8f,
+		0x90, 0x91, 0x92, 0x93, 0x94, 0x95, 0x96, 0x97, 0x98, 0x99, 0x9a, 0x9b, 0x9c, 0x9d, 0x9e, 0x9f,
+	}
+	nonce := []byte{
+		0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07,
+	}
+	block, err := chacha20poly1305.Poly1305KeyGen(key, nonce)
+	if err != nil {
+		t.Errorf("%v", err)
+		return
+	}
+	t.Logf("%x", block)
+	bin := []byte{
+		0x8a, 0xd5, 0xa0, 0x8b, 0x90, 0x5f, 0x81, 0xcc, 0x81, 0x50, 0x40, 0x27, 0x4a, 0xb2, 0x94, 0x71,
+		0xa8, 0x33, 0xb6, 0x37, 0xe3, 0xfd, 0x0d, 0xa5, 0x08, 0xdb, 0xb8, 0xe2, 0xfd, 0xd1, 0xa6, 0x46,
+	}
+	if !reflect.DeepEqual(block, bin) {
+		t.Errorf("Poly1305KeyGen error :\n%02x\n%02x", block, bin)
+		return
+	}
+}
+
+func TestChaCha20AeadEncrypt(t *testing.T) {
+	plaintext := []byte{
+		0x4c, 0x61, 0x64, 0x69, 0x65, 0x73, 0x20, 0x61, 0x6e, 0x64, 0x20, 0x47, 0x65, 0x6e, 0x74, 0x6c,
+		0x65, 0x6d, 0x65, 0x6e, 0x20, 0x6f, 0x66, 0x20, 0x74, 0x68, 0x65, 0x20, 0x63, 0x6c, 0x61, 0x73,
+		0x73, 0x20, 0x6f, 0x66, 0x20, 0x27, 0x39, 0x39, 0x3a, 0x20, 0x49, 0x66, 0x20, 0x49, 0x20, 0x63,
+		0x6f, 0x75, 0x6c, 0x64, 0x20, 0x6f, 0x66, 0x66, 0x65, 0x72, 0x20, 0x79, 0x6f, 0x75, 0x20, 0x6f,
+		0x6e, 0x6c, 0x79, 0x20, 0x6f, 0x6e, 0x65, 0x20, 0x74, 0x69, 0x70, 0x20, 0x66, 0x6f, 0x72, 0x20,
+		0x74, 0x68, 0x65, 0x20, 0x66, 0x75, 0x74, 0x75, 0x72, 0x65, 0x2c, 0x20, 0x73, 0x75, 0x6e, 0x73,
+		0x63, 0x72, 0x65, 0x65, 0x6e, 0x20, 0x77, 0x6f, 0x75, 0x6c, 0x64, 0x20, 0x62, 0x65, 0x20, 0x69,
+		0x74, 0x2e,
+	}
+	aad := []byte{
+		0x50, 0x51, 0x52, 0x53, 0xc0, 0xc1, 0xc2, 0xc3, 0xc4, 0xc5, 0xc6, 0xc7,
+	}
+	key := []byte{
+		0x80, 0x81, 0x82, 0x83, 0x84, 0x85, 0x86, 0x87, 0x88, 0x89, 0x8a, 0x8b, 0x8c, 0x8d, 0x8e, 0x8f,
+		0x90, 0x91, 0x92, 0x93, 0x94, 0x95, 0x96, 0x97, 0x98, 0x99, 0x9a, 0x9b, 0x9c, 0x9d, 0x9e, 0x9f,
+	}
+	iv := []byte{
+		0x40, 0x41, 0x42, 0x43, 0x44, 0x45, 0x46, 0x47,
+	}
+	constant := []byte{
+		0x07, 0x00, 0x00, 0x00,
+	}
+	ciphertext, tag, err := chacha20poly1305.ChaCha20AeadEncrypt(aad, key, iv, constant, plaintext)
+	if err != nil {
+		t.Errorf("%v", err)
+		return
+	}
+	bin1 := []byte{
+		0x1a, 0xe1, 0x0b, 0x59, 0x4f, 0x09, 0xe2, 0x6a, 0x7e, 0x90, 0x2e, 0xcb, 0xd0, 0x60, 0x06, 0x91,
+	}
+	if !reflect.DeepEqual(tag, bin1) {
+		t.Errorf("ChaCha20AeadEncrypt tag error :\n%02x\n%02x", tag, bin1)
+		return
+	}
+	bin2 := []byte{
+		0xd3, 0x1a, 0x8d, 0x34, 0x64, 0x8e, 0x60, 0xdb, 0x7b, 0x86, 0xaf, 0xbc, 0x53, 0xef, 0x7e, 0xc2,
+		0xa4, 0xad, 0xed, 0x51, 0x29, 0x6e, 0x08, 0xfe, 0xa9, 0xe2, 0xb5, 0xa7, 0x36, 0xee, 0x62, 0xd6,
+		0x3d, 0xbe, 0xa4, 0x5e, 0x8c, 0xa9, 0x67, 0x12, 0x82, 0xfa, 0xfb, 0x69, 0xda, 0x92, 0x72, 0x8b,
+		0x1a, 0x71, 0xde, 0x0a, 0x9e, 0x06, 0x0b, 0x29, 0x05, 0xd6, 0xa5, 0xb6, 0x7e, 0xcd, 0x3b, 0x36,
+		0x92, 0xdd, 0xbd, 0x7f, 0x2d, 0x77, 0x8b, 0x8c, 0x98, 0x03, 0xae, 0xe3, 0x28, 0x09, 0x1b, 0x58,
+		0xfa, 0xb3, 0x24, 0xe4, 0xfa, 0xd6, 0x75, 0x94, 0x55, 0x85, 0x80, 0x8b, 0x48, 0x31, 0xd7, 0xbc,
+		0x3f, 0xf4, 0xde, 0xf0, 0x8e, 0x4b, 0x7a, 0x9d, 0xe5, 0x76, 0xd2, 0x65, 0x86, 0xce, 0xc6, 0x4b,
+		0x61, 0x16,
+	}
+	if !reflect.DeepEqual(ciphertext, bin2) {
+		t.Errorf("ChaCha20AeadEncrypt ciphertext error :\n%02x\n%02x", tag, bin2)
+		return
+	}
+}
+
+func TestTestVectorA1(t *testing.T) {
+	tvs := getTestVectorsA1()
+	count := 0
+	for _, tv := range tvs {
+		state, err := chacha20poly1305.ChaCha20Block(tv.Key, tv.Counter, tv.Nonce)
+		if err != nil {
+			t.Errorf("%v", err)
+			return
+		}
+		if !reflect.DeepEqual(state, tv.Keystream) {
+			t.Errorf("ChaCha20Block error : \n%02x\n%02x", state, tv.Keystream)
+			return
+		}
+		count++
+		t.Logf("OK!(%d/%d)", count, len(tvs))
+	}
+}
+
+func TestTestVectorA2(t *testing.T) {
+	tvs := getTestVectorsA2()
+	count := 0
+	for _, tv := range tvs {
+		ciphertext, err := chacha20poly1305.ChaCha20Encrypt(tv.Key, tv.Counter, tv.Nonce, tv.Plaintext)
+		if err != nil {
+			t.Errorf("%v", err)
+			return
+		}
+		if !reflect.DeepEqual(ciphertext, tv.Ciphertext) {
+			t.Errorf("ChaCha20Encrypt error : \n%02x\n%02x", ciphertext, tv.Ciphertext)
+			return
+		}
+		plaintext, err := chacha20poly1305.ChaCha20Encrypt(tv.Key, tv.Counter, tv.Nonce, tv.Ciphertext)
+		if err != nil {
+			t.Errorf("%v", err)
+			return
+		}
+		if !reflect.DeepEqual(plaintext, tv.Plaintext) {
+			t.Errorf("ChaCha20Encrypt error : \n%02x\n%02x", plaintext, tv.Plaintext)
+			return
+		}
+		count++
+		t.Logf("OK!(%d/%d)", count, len(tvs))
+	}
+}
+
+func TestTestVectorA3(t *testing.T) {
+	tvs := getTestVectorsA3()
+	count := 0
+	for _, tv := range tvs {
+		tag, err := chacha20poly1305.Poly1305Mac(tv.MAC, tv.Key)
+		if err != nil {
+			t.Errorf("%v", err)
+			return
+		}
+		if !reflect.DeepEqual(tag, tv.Tag) {
+			t.Errorf("Poly1305Mac error : \n%02x\n%02x", tag, tv.Tag)
+			return
+		}
+		count++
+		t.Logf("OK!(%02d/%02d)", count, len(tvs))
+	}
+}
+
+func TestTestVectorA5(t *testing.T) {
+	// The ChaCha20 Key
+	// 000  1c 92 40 a5 eb 55 d3 8a f3 33 88 86 04 f6 b5 f0  ..@..U...3......
+	// 016  47 39 17 c1 40 2b 80 09 9d ca 5c bc 20 70 75 c0  G9..@+....\. pu.
+	key := str2bs(
+		"1c 92 40 a5 eb 55 d3 8a f3 33 88 86 04 f6 b5 f0",
+		"47 39 17 c1 40 2b 80 09 9d ca 5c bc 20 70 75 c0",
+	)
+	// Ciphertext:
+	// 000  64 a0 86 15 75 86 1a f4 60 f0 62 c7 9b e6 43 bd  d...u...`.b...C.
+	// 016  5e 80 5c fd 34 5c f3 89 f1 08 67 0a c7 6c 8c b2  ^.\.4\....g..l..
+	// 032  4c 6c fc 18 75 5d 43 ee a0 9e e9 4e 38 2d 26 b0  Ll..u]C....N8-&.
+	// 048  bd b7 b7 3c 32 1b 01 00 d4 f0 3b 7f 35 58 94 cf  ...<2.....;.5X..
+	// 064  33 2f 83 0e 71 0b 97 ce 98 c8 a8 4a bd 0b 94 81  3/..q......J....
+	// 080  14 ad 17 6e 00 8d 33 bd 60 f9 82 b1 ff 37 c8 55  ...n..3.`....7.U
+	// 096  97 97 a0 6e f4 f0 ef 61 c1 86 32 4e 2b 35 06 38  ...n...a..2N+5.8
+	// 112  36 06 90 7b 6a 7c 02 b0 f9 f6 15 7b 53 c8 67 e4  6..{j|.....{S.g.
+	// 128  b9 16 6c 76 7b 80 4d 46 a5 9b 52 16 cd e7 a4 e9  ..lv{.MF..R.....
+	// 144  90 40 c5 a4 04 33 22 5e e2 82 a1 b0 a0 6c 52 3e  .@...3"^.....lR>
+	// 160  af 45 34 d7 f8 3f a1 15 5b 00 47 71 8c bc 54 6a  .E4..?..[.Gq..Tj
+	// 176  0d 07 2b 04 b3 56 4e ea 1b 42 22 73 f5 48 27 1a  ..+..VN..B"s.H'.
+	// 192  0b b2 31 60 53 fa 76 99 19 55 eb d6 31 59 43 4e  ..1`S.v..U..1YCN
+	// 208  ce bb 4e 46 6d ae 5a 10 73 a6 72 76 27 09 7a 10  ..NFm.Z.s.rv'.z.
+	// 224  49 e6 17 d9 1d 36 10 94 fa 68 f0 ff 77 98 71 30  I....6...h..w.q0
+	// 240  30 5b ea ba 2e da 04 df 99 7b 71 4d 6c 6f 2c 29  0[.......{qMlo,)
+	// 256  a6 ad 5c b4 02 2b 02 70 9b                       ..\..+.p.
+	ciphertext := str2bs(
+		"64 a0 86 15 75 86 1a f4 60 f0 62 c7 9b e6 43 bd",
+		"5e 80 5c fd 34 5c f3 89 f1 08 67 0a c7 6c 8c b2",
+		"4c 6c fc 18 75 5d 43 ee a0 9e e9 4e 38 2d 26 b0",
+		"bd b7 b7 3c 32 1b 01 00 d4 f0 3b 7f 35 58 94 cf",
+		"33 2f 83 0e 71 0b 97 ce 98 c8 a8 4a bd 0b 94 81",
+		"14 ad 17 6e 00 8d 33 bd 60 f9 82 b1 ff 37 c8 55",
+		"97 97 a0 6e f4 f0 ef 61 c1 86 32 4e 2b 35 06 38",
+		"36 06 90 7b 6a 7c 02 b0 f9 f6 15 7b 53 c8 67 e4",
+		"b9 16 6c 76 7b 80 4d 46 a5 9b 52 16 cd e7 a4 e9",
+		"90 40 c5 a4 04 33 22 5e e2 82 a1 b0 a0 6c 52 3e",
+		"af 45 34 d7 f8 3f a1 15 5b 00 47 71 8c bc 54 6a",
+		"0d 07 2b 04 b3 56 4e ea 1b 42 22 73 f5 48 27 1a",
+		"0b b2 31 60 53 fa 76 99 19 55 eb d6 31 59 43 4e",
+		"ce bb 4e 46 6d ae 5a 10 73 a6 72 76 27 09 7a 10",
+		"49 e6 17 d9 1d 36 10 94 fa 68 f0 ff 77 98 71 30",
+		"30 5b ea ba 2e da 04 df 99 7b 71 4d 6c 6f 2c 29",
+		"a6 ad 5c b4 02 2b 02 70 9b",
+	)
+	// The nonce:
+	// 000  00 00 00 00 01 02 03 04 05 06 07 08              ............
+	nonce := str2bs("00 00 00 00 01 02 03 04 05 06 07 08")
+	// The AAD:
+	// 000  f3 33 88 86 00 00 00 00 00 00 4e 91              .3........N.
+	aad := str2bs("f3 33 88 86 00 00 00 00 00 00 4e 91")
+	plaintext, tag, err := chacha20poly1305.ChaCha20AeadDecrypt(aad, key, nonce[4:], nonce[0:4], ciphertext)
+	if err != nil {
+		t.Errorf("%v", err)
+		return
+	}
+	// Calculated Tag:
+	// 000  ee ad 9d 67 89 0c bb 22 39 23 36 fe a1 85 1f 38  ...g..."9#6....8
+	bin1 := str2bs("ee ad 9d 67 89 0c bb 22 39 23 36 fe a1 85 1f 38")
+	if !reflect.DeepEqual(tag, bin1) {
+		t.Errorf("ChaCha20AeadDecrypt error : \n%02x\n%02x", tag, bin1)
+		return
+	}
+	//  Finally, we decrypt the ciphertext
+
+	// Plaintext::
+	// 000  49 6e 74 65 72 6e 65 74 2d 44 72 61 66 74 73 20  Internet-Drafts
+	// 016  61 72 65 20 64 72 61 66 74 20 64 6f 63 75 6d 65  are draft docume
+	// 032  6e 74 73 20 76 61 6c 69 64 20 66 6f 72 20 61 20  nts valid for a
+	// 048  6d 61 78 69 6d 75 6d 20 6f 66 20 73 69 78 20 6d  maximum of six m
+	// 064  6f 6e 74 68 73 20 61 6e 64 20 6d 61 79 20 62 65  onths and may be
+	// 080  20 75 70 64 61 74 65 64 2c 20 72 65 70 6c 61 63   updated, replac
+	// 096  65 64 2c 20 6f 72 20 6f 62 73 6f 6c 65 74 65 64  ed, or obsoleted
+	// 112  20 62 79 20 6f 74 68 65 72 20 64 6f 63 75 6d 65   by other docume
+	// 128  6e 74 73 20 61 74 20 61 6e 79 20 74 69 6d 65 2e  nts at any time.
+	// 144  20 49 74 20 69 73 20 69 6e 61 70 70 72 6f 70 72   It is inappropr
+	// 160  69 61 74 65 20 74 6f 20 75 73 65 20 49 6e 74 65  iate to use Inte
+	// 176  72 6e 65 74 2d 44 72 61 66 74 73 20 61 73 20 72  rnet-Drafts as r
+	// 192  65 66 65 72 65 6e 63 65 20 6d 61 74 65 72 69 61  eference materia
+	// 208  6c 20 6f 72 20 74 6f 20 63 69 74 65 20 74 68 65  l or to cite the
+	// 224  6d 20 6f 74 68 65 72 20 74 68 61 6e 20 61 73 20  m other than as
+	// 240  2f e2 80 9c 77 6f 72 6b 20 69 6e 20 70 72 6f 67  /...work in prog
+	// 256  72 65 73 73 2e 2f e2 80 9d
+	bin2 := str2bs(
+		"49 6e 74 65 72 6e 65 74 2d 44 72 61 66 74 73 20",
+		"61 72 65 20 64 72 61 66 74 20 64 6f 63 75 6d 65",
+		"6e 74 73 20 76 61 6c 69 64 20 66 6f 72 20 61 20",
+		"6d 61 78 69 6d 75 6d 20 6f 66 20 73 69 78 20 6d",
+		"6f 6e 74 68 73 20 61 6e 64 20 6d 61 79 20 62 65",
+		"20 75 70 64 61 74 65 64 2c 20 72 65 70 6c 61 63",
+		"65 64 2c 20 6f 72 20 6f 62 73 6f 6c 65 74 65 64",
+		"20 62 79 20 6f 74 68 65 72 20 64 6f 63 75 6d 65",
+		"6e 74 73 20 61 74 20 61 6e 79 20 74 69 6d 65 2e",
+		"20 49 74 20 69 73 20 69 6e 61 70 70 72 6f 70 72",
+		"69 61 74 65 20 74 6f 20 75 73 65 20 49 6e 74 65",
+		"72 6e 65 74 2d 44 72 61 66 74 73 20 61 73 20 72",
+		"65 66 65 72 65 6e 63 65 20 6d 61 74 65 72 69 61",
+		"6c 20 6f 72 20 74 6f 20 63 69 74 65 20 74 68 65",
+		"6d 20 6f 74 68 65 72 20 74 68 61 6e 20 61 73 20",
+		"2f e2 80 9c 77 6f 72 6b 20 69 6e 20 70 72 6f 67",
+		"72 65 73 73 2e 2f e2 80 9d",
+	)
+	if !reflect.DeepEqual(plaintext, bin2) {
+		t.Errorf("ChaCha20AeadDecrypt error : \n%02x\n%02x", plaintext, bin2)
+		return
+	}
+}
