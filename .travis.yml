@@ -1,8 +1,8 @@
 language: go
- 
+
 install:
- - go get -u github.com/btcsuite/btcd/btcec
+  - go get -u github.com/btcsuite/btcd/btcec
+  - go get -u github.com/mit-dci/lit/btcutil/txscript
 
 script:
   - go test -v ./...
-
